@@ -1,1 +1,0 @@
-{"rsync":{"/vagrant":{"type":"rsync","guestpath":"/vagrant","hostpath":"/Users/omartinmonteneg/Developer/GOPATH/src/aws-ec2-consul-healthcheck","disabled":false,"__vagrantfile":true,"owner":"vagrant","group":"vagrant"}}}
