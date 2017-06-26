@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
 	"time"
@@ -20,6 +20,8 @@ var tr = &http.Transport{
 	DisableCompression: true,
 }
 var httpClient = &http.Client{Transport: tr}
+var awsRegion string
+var awsInstanceId string
 
 func main() {
 	fmt.Println("Initialising healthcheck...")
@@ -32,6 +34,14 @@ func main() {
 	fmt.Printf("Service Path: %s, grace interval: %s, interval: %s, unhealthy threshold: %d \n",
 		*servicePath, *graceInterval, *interval, *unhealthyThreshold)
 	time.Sleep(*graceInterval)
+	if canAwsSetInstanceHealth {
+		instanceId, _ := GetContent("http://169.254.169.254/latest/meta-data/instance-id")
+		region, _ := GetContent("http://169.254.169.254/latest/meta-data/placement/availability-zone")
+		awsInstanceId = string(instanceId)
+		regionString := string(region)
+		awsRegion = regionString[:len(regionString) - 1]
+		fmt.Printf("Region: %s and instanceId: %s\n", awsRegion, awsInstanceId)
+	}
 	counter := 0
 	serviceNames := GetServiceNames(*servicePath)
 	for {
@@ -110,14 +120,17 @@ func SetInstanceHealth(health string) {
 }
 
 func AwsSetInstanceHealth(health string) {
-	session := session.Must(session.NewSession())
-	ec2metadataService := ec2metadata.New(session)
-	autoscalingService := autoscaling.New(session)
-	region, _ := ec2metadataService.Region()
-	instanceId, _ := ec2metadataService.GetMetadata("instance-id")
-	fmt.Printf("Region: %s and instanceId: %s\n", region, instanceId)
+	session := session.Must(session.NewSession(&aws.Config{
+		Region: aws.String(awsRegion),
+	}))
 	shouldRespectGracePeriod := true
-	request := autoscaling.SetInstanceHealthInput{HealthStatus: &health, InstanceId: &instanceId,
+	autoscalingService := autoscaling.New(session)
+	request := autoscaling.SetInstanceHealthInput{HealthStatus: &health, InstanceId: &awsInstanceId,
 		ShouldRespectGracePeriod: &shouldRespectGracePeriod}
-	autoscalingService.SetInstanceHealth(&request)
+	respose, error := autoscalingService.SetInstanceHealth(&request)
+	if error != nil {
+		fmt.Printf("Error updating health: %v\n", error)
+	} else {
+		fmt.Printf("Result of updating health: %v\n", respose)
+	}
 }
