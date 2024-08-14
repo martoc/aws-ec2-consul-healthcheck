@@ -1,5 +1,5 @@
 FROM centos:8
-FROM golang:1.22
+FROM golang:1.23
 
 ADD . /go/aws-ec2-consul-healthcheck
 
